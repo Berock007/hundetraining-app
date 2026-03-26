@@ -150,32 +150,52 @@ with tab2:
                 conn.update(worksheet="vorlagen", data=vorlagen_df)
                 st.rerun()
 
-# --- TAB 3: STATISTIK (REPARIERT) ---
+# --- TAB 3: STATISTIK (VOLLSTÄNDIG & REPARIERT) ---
 with tab3:
     st.subheader("📊 Statistik")
+    
     if not trainings_df.empty:
-        # Nur erledigte Trainings für die Statistik nutzen
-        erledigt = trainings_df[trainings_df['status'] == "✅"].copy()
+        # Kopie der Daten erstellen und Datum umwandeln
+        df_stats = trainings_df.copy()
+        df_stats['datum'] = pd.to_datetime(df_stats['datum'])
         
-        st.metric("Erledigt gesamt", len(erledigt))
+        # Auswahl des Zeitraums
+        zeitraum = st.radio("Zeitraum auswählen:", ["Gesamt", "Aktueller Monat"], horizontal=True)
         
-        if not erledigt.empty:
-            # Bewertung in Zahlen umwandeln für den Durchschnitt
-            erledigt['rating_num'] = erledigt['rating'].map(smiley_map)
+        # Filter anwenden
+        if zeitraum == "Aktueller Monat":
+            jetzt = datetime.now()
+            df_stats = df_stats[(df_stats['datum'].dt.month == jetzt.month) & 
+                                (df_stats['datum'].dt.year == jetzt.year)]
+
+        # Nur erledigte Trainings zählen
+        erledigt_df = df_stats[df_stats['status'] == "✅"].copy()
+        
+        # Metriken anzeigen
+        m1, m2 = st.columns(2)
+        m1.metric("Erledigt", len(erledigt_df))
+        
+        if not erledigt_df.empty:
+            # Bewertung in Zahlen umwandeln
+            erledigt_df['rating_num'] = erledigt_df['rating'].map(smiley_map)
             
-            # Gruppieren nach Übungstitel
-            stats = erledigt.groupby('title').agg(
+            # Durchschnittlicher Erfolg (Gesamt-Smiley)
+            avg_val = round(erledigt_df['rating_num'].mean())
+            m2.metric("Schnitt-Erfolg", reverse_smiley_map.get(avg_val, "😐"))
+            
+            # Gruppierung nach Übung
+            stats = erledigt_df.groupby('title').agg(
                 Anzahl=('title', 'count'), 
                 Schnitt=('rating_num', 'mean')
             ).reset_index()
             
-            # Den Zahlendurchschnitt zurück in Smileys verwandeln
+            # Zurück in Smileys wandeln
             stats['Ergebnis'] = stats['Schnitt'].apply(lambda x: reverse_smiley_map.get(round(x), "😐"))
             
-            # Tabelle anzeigen (jetzt mit der Spalte 'Ergebnis'!)
+            # Tabelle anzeigen
             st.table(stats[['title', 'Anzahl', 'Ergebnis']])
         else:
-            st.info("Markiere Trainings als 'Erledigt', um Statistiken zu sehen.")
+            st.info("In diesem Zeitraum wurden noch keine Trainings als 'Erledigt' markiert.")
     else:
         st.info("Noch keine Trainingsdaten in der Cloud gefunden.")
         
