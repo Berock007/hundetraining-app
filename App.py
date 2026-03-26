@@ -150,15 +150,32 @@ with tab2:
                 conn.update(worksheet="vorlagen", data=vorlagen_df)
                 st.rerun()
 
-# --- TAB 3: STATISTIK ---
+# --- TAB 3: STATISTIK (REPARIERT) ---
 with tab3:
     st.subheader("📊 Statistik")
     if not trainings_df.empty:
-        erledigt = trainings_df[trainings_df['status'] == "✅"]
+        # Nur erledigte Trainings für die Statistik nutzen
+        erledigt = trainings_df[trainings_df['status'] == "✅"].copy()
+        
         st.metric("Erledigt gesamt", len(erledigt))
+        
         if not erledigt.empty:
+            # Bewertung in Zahlen umwandeln für den Durchschnitt
             erledigt['rating_num'] = erledigt['rating'].map(smiley_map)
-            stats = erledigt.groupby('title').agg(Anzahl=('title', 'count'), Schnitt=('rating_num', 'mean')).reset_index()
-            stats['Erfolg'] = stats['Schnitt'].apply(lambda x: reverse_smiley_map[round(x)])
-            st.table(stats[['title', 'Anzahl', 'Ergebnis']])
             
+            # Gruppieren nach Übungstitel
+            stats = erledigt.groupby('title').agg(
+                Anzahl=('title', 'count'), 
+                Schnitt=('rating_num', 'mean')
+            ).reset_index()
+            
+            # Den Zahlendurchschnitt zurück in Smileys verwandeln
+            stats['Ergebnis'] = stats['Schnitt'].apply(lambda x: reverse_smiley_map.get(round(x), "😐"))
+            
+            # Tabelle anzeigen (jetzt mit der Spalte 'Ergebnis'!)
+            st.table(stats[['title', 'Anzahl', 'Ergebnis']])
+        else:
+            st.info("Markiere Trainings als 'Erledigt', um Statistiken zu sehen.")
+    else:
+        st.info("Noch keine Trainingsdaten in der Cloud gefunden.")
+        
