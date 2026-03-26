@@ -6,43 +6,36 @@ import calendar as py_cal
 # --- SETUP ---
 st.set_page_config(page_title="Pfoten-Planer Pro", layout="centered", page_icon="🐾")
 
-# --- DER ULTIMATIVE HANDY-FIX (CSS) ---
+# --- PRÄZISER HANDY-FIX (Nur für den Kalender-Bereich) ---
 st.markdown("""
     <style>
-    /* Verhindert, dass Spalten auf Handys untereinander rutschen */
-    [data-testid="stHorizontalBlock"] {
-        display: flex !important;
-        flex-direction: row !important;
-        flex-wrap: nowrap !important;
-        align-items: center !important;
-        justify-content: space-between !important;
-        gap: 2px !important;
+    /* Nur die Spalten innerhalb des Kalender-Grids fixieren */
+    .stColumn {
+        min-width: 0px !important;
     }
     
-    /* Erzwingt eine feste Breite für die 7 Kalender-Spalten */
-    [data-testid="stHorizontalBlock"] > div {
-        min-width: 0px !important;
-        flex: 1 1 0% !important;
+    /* Spezielles Styling für die Buttons im Kalender-Tab */
+    div[data-testid="stHorizontalBlock"] {
+        gap: 2px !important;
     }
 
-    /* Buttons extrem kompakt machen */
-    .stButton button {
+    /* Die Tabs (Reiter) wieder normal positionieren */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        margin-top: 10px;
+    }
+
+    /* Kalender-Buttons kompakt, aber Tabs-Buttons normal */
+    div[data-testid="column"] button {
         width: 100% !important;
         padding: 2px !important;
         height: 48px !important;
-        font-size: 10px !important;
-        line-height: 1 !important;
-        border: 1px solid #ddd !important;
+        font-size: 11px !important;
     }
 
-    /* Überschriften verkleinern */
-    p, span, label {
-        font-size: 12px !important;
-    }
-
-    /* Padding der Seite minimieren */
+    /* Padding für den Hauptinhalt korrigieren */
     .block-container {
-        padding: 0.5rem !important;
+        padding-top: 2rem !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -60,12 +53,13 @@ if 'selected_date' not in st.session_state:
 smiley_map = {"❌": 1, "😐": 2, "🙂": 3, "🤩": 4}
 reverse_smiley_map = {1: "❌", 2: "😐", 3: "🙂", 4: "🤩"}
 
+# --- TABS ---
 tab1, tab2, tab3 = st.tabs(["📅 Planung", "⚙️ Vorlagen", "📊 Statistik"])
 
 # --- TAB 1: PLANUNG ---
 with tab1:
-    # Navigations-Bereich (Hier lassen wir das Stacking zu für bessere Lesbarkeit)
-    st.markdown(f"<h3 style='text-align: center; margin:0;'>{st.session_state.view_date.strftime('%B %Y')}</h3>", unsafe_allow_html=True)
+    st.markdown(f"<h3 style='text-align: center;'>{st.session_state.view_date.strftime('%B %Y')}</h3>", unsafe_allow_html=True)
+    
     c_nav1, c_nav2 = st.columns(2)
     with c_nav1:
         if st.button("⬅️ Letzter Monat", use_container_width=True): 
@@ -76,13 +70,13 @@ with tab1:
             st.session_state.view_date += timedelta(days=30)
             st.rerun()
 
-    st.write("") # Abstand
+    st.write("") 
 
-    # Kalender Header (Mo-So)
+    # Kalender Header
     days_header = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
     cols_h = st.columns(7)
     for i, day in enumerate(days_header):
-        cols_h[i].markdown(f"<p style='text-align:center; font-weight:bold; margin:0;'>{day}</p>", unsafe_allow_html=True)
+        cols_h[i].markdown(f"<p style='text-align:center; font-weight:bold; font-size:10px; margin:0;'>{day}</p>", unsafe_allow_html=True)
 
     # Kalender Tage
     cal = py_cal.Calendar(firstweekday=0)
@@ -94,12 +88,10 @@ with tab1:
             date_str = str(day)
             label = f"{day.day}"
             
-            # Status-Icon hinzufügen
             if date_str in st.session_state.trainings:
                 t_item = st.session_state.trainings[date_str]
                 label += "\n🐾" if t_item['status'] == "⏳" else "\n✅"
             
-            # Tage des aktuellen Monats klickbar machen
             if day.month == st.session_state.view_date.month:
                 if cols[i].button(label, key=f"d_{date_str}"):
                     st.session_state.selected_date = date_str
@@ -135,7 +127,7 @@ with tab1:
                 st.session_state.trainings[sel_date] = {"title": v['name'], "dauer": v['dauer'], "material": v['material'], "status": "⏳", "notes": "", "rating": "😐"}
                 st.rerun()
 
-# --- TAB 2: VORLAGEN ---
+# --- TAB 2 & 3 (Wie vorher, Statistiken sind korrigiert) ---
 with tab2:
     st.subheader("Übungsvorlagen")
     for idx, v in enumerate(st.session_state.vorlagen):
@@ -153,7 +145,6 @@ with tab2:
             if n: st.session_state.vorlagen.append({"name": n, "dauer": d, "material": m})
             st.rerun()
 
-# --- TAB 3: STATISTIK ---
 with tab3:
     st.subheader("📊 Statistik")
     if not st.session_state.trainings:
