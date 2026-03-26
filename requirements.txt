@@ -2,3 +2,4 @@ streamlit
 streamlit-calendar
 pandas
 gspread
+st-gsheets-connection
