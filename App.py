@@ -31,8 +31,7 @@ with tab1:
         "firstDay": 1,
     }
     state = calendar(events=st.session_state.trainings, options=cal_options, key="dog_calendar")
-
-        # --- ABSOLUT SICHERE DATUMS-LOGIK ---
+    # --- ABSOLUT SICHERE DATUMS-LOGIK ---
     if state.get("dateClick"):
         # Wir nehmen den String, trennen ihn am "T" und nehmen nur den ersten Teil (YYYY-MM-DD)
         raw_date = state["dateClick"]["date"]
@@ -55,7 +54,7 @@ with tab1:
         st.session_state.selected_date = str(temp_date)
     except:
         pass
-
+        
 
     st.divider()
     sel_date = st.session_state.selected_date
