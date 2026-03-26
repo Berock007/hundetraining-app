@@ -1,11 +1,12 @@
 import streamlit as st
 from streamlit_calendar import calendar
-from datetime import datetime, timedelta
+from datetime import datetime
+import pandas as pd
 
 # --- SETUP ---
 st.set_page_config(page_title="Pfoten-Planer", layout="wide", page_icon="🐾")
 
-# Initialisierung der Daten
+# Initialisierung der Daten (Session State - wird später durch Cloud ersetzt)
 if 'trainings' not in st.session_state:
     st.session_state.trainings = [] 
 if 'vorlagen' not in st.session_state:
@@ -13,33 +14,31 @@ if 'vorlagen' not in st.session_state:
 if 'selected_date' not in st.session_state:
     st.session_state.selected_date = datetime.now().strftime("%Y-%m-%d")
 
-# --- NAVIGATION ---
-tab1, tab2 = st.tabs(["📅 Kalender & Planung", "⚙️ Vorlagen"])
+# Hilfsfunktion: Smiley in Zahl umwandeln für Statistik
+smiley_map = {"❌": 1, "😐": 2, "🙂": 3, "🤩": 4}
+reverse_smiley_map = {1: "❌", 2: "😐", 3: "🙂", 4: "🤩"}
 
+# --- NAVIGATION ---
+tab1, tab2, tab3 = st.tabs(["📅 Kalender & Planung", "⚙️ Vorlagen", "📊 Statistik"])
+
+# --- TAB 1: KALENDER & DETAILS ---
 with tab1:
     cal_options = {
-        "headerToolbar": {
-            "left": "prev,next today",
-            "center": "title",
-            "right": "dayGridMonth,listWeek"
-        },
+        "headerToolbar": {"left": "prev,next today", "center": "title", "right": "dayGridMonth,listWeek"},
         "initialView": "dayGridMonth",
         "selectable": True,
         "locale": "de",
-        "firstDay": 1, # Woche beginnt am Montag
+        "firstDay": 1,
     }
     
     state = calendar(events=st.session_state.trainings, options=cal_options, key="dog_calendar")
 
-    # --- FEHLERBEHEBUNG DATUMSKLICK ---
     if state.get("dateClick"):
-        # Wir nehmen nur die ersten 10 Zeichen (YYYY-MM-DD), um Zeitzonen-Fehler zu vermeiden
         st.session_state.selected_date = state["dateClick"]["date"][:10]
     elif state.get("eventClick"):
         st.session_state.selected_date = state["eventClick"]["event"]["start"][:10]
 
     st.divider()
-    
     sel_date = st.session_state.selected_date
     date_obj = datetime.strptime(sel_date, "%Y-%m-%d")
     st.markdown(f"### 📍 Fokus: {date_obj.strftime('%A, %d.%m.%Y')}")
@@ -80,6 +79,7 @@ with tab1:
                 })
                 st.rerun()
 
+# --- TAB 2: VORLAGEN ---
 with tab2:
     st.subheader("Übungsvorlagen")
     for idx, v in enumerate(st.session_state.vorlagen):
@@ -89,7 +89,6 @@ with tab2:
             if c2.button("🗑️", key=f"del_v_{idx}"):
                 st.session_state.vorlagen.pop(idx)
                 st.rerun()
-
     with st.expander("➕ Neue Vorlage"):
         with st.form("neue_vorlage"):
             n = st.text_input("Name")
@@ -98,4 +97,44 @@ with tab2:
             if st.form_submit_button("Speichern"):
                 if n: st.session_state.vorlagen.append({"name": n, "dauer": d, "material": m})
                 st.rerun()
-                
+
+# --- TAB 3: STATISTIK ---
+with tab3:
+    st.subheader("🐾 Trainings-Erfolge")
+    
+    if not st.session_state.trainings:
+        st.info("Noch keine Trainingsdaten für die Statistik vorhanden.")
+    else:
+        df = pd.DataFrame(st.session_state.trainings)
+        
+        # 1. Metriken oben
+        erledigt = len(df[df['status'] == "✅"])
+        geplant = len(df[df['status'] == "⏳"])
+        
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Erledigte Trainings", erledigt)
+        m2.metric("Offene Trainings", geplant)
+        
+        # Durchschnittliche Bewertung berechnen
+        df['rating_num'] = df['rating'].map(smiley_map)
+        avg_rating = df[df['status'] == "✅"]['rating_num'].mean()
+        if not pd.isna(avg_rating):
+            m3.metric("Durchschnitts-Erfolg", reverse_smiley_map[round(avg_rating)])
+
+        st.divider()
+
+        # 2. Detail-Tabelle pro Übung
+        st.markdown("### Auswertung pro Übung")
+        stats_df = df[df['status'] == "✅"].groupby('title').agg(
+            Anzahl=('title', 'count'),
+            Beste_Bewertung=('rating_num', 'max'),
+            Schnitt=('rating_num', 'mean')
+        ).reset_index()
+
+        if not stats_df.empty:
+            stats_df['Schnitt'] = stats_df['Schnitt'].apply(lambda x: reverse_smiley_map[round(x)])
+            stats_df['Beste_Bewertung'] = stats_df['Beste_Bewertung'].apply(lambda x: reverse_smiley_map[x])
+            st.dataframe(stats_df, use_container_width=True, hide_index=True)
+        else:
+            st.write("Schließe Trainings ab, um detaillierte Statistiken zu sehen!")
+            
