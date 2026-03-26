@@ -1,91 +1,107 @@
 import streamlit as st
-from streamlit_calendar import calendar
-from datetime import datetime
 import pandas as pd
+from datetime import datetime, timedelta
+import calendar as py_cal
 
 # --- SETUP ---
-st.set_page_config(page_title="Pfoten-Planer Pro", layout="wide", page_icon="🐾")
+st.set_page_config(page_title="Pfoten-Planer Pro", layout="centered", page_icon="🐾")
 
-# Initialisierung der Daten (Wird bei Cloud-Anbindung durch Datenbank-Abfrage ersetzt)
+# Initialisierung der Daten
 if 'trainings' not in st.session_state:
-    st.session_state.trainings = [] 
+    st.session_state.trainings = {} # Wir nutzen ein Dict: {"YYYY-MM-DD": {Daten}}
 if 'vorlagen' not in st.session_state:
     st.session_state.vorlagen = [{"name": "Leinenführigkeit", "dauer": 15, "material": "Schleppleine"}]
+if 'view_date' not in st.session_state:
+    st.session_state.view_date = datetime.now().date()
 if 'selected_date' not in st.session_state:
-    st.session_state.selected_date = datetime.now().strftime("%Y-%m-%d")
+    st.session_state.selected_date = str(datetime.now().date())
 
-# Hilfswerkzeuge für Bewertungen
-smiley_map = {"❌": 1, "😐": 2, "🙂": 3, "🤩": 4}
-reverse_smiley_map = {1: "❌", 2: "😐", 3: "🙂", 4: "🤩"}
+# --- HELFER: MONATS-NAVIGATOR ---
+st.title("🐾 Unser Pfoten-Planer")
+tab1, tab2, tab3 = st.tabs(["📅 Planung", "⚙️ Vorlagen", "📊 Statistik"])
 
-# --- NAVIGATION ---
-tab1, tab2, tab3 = st.tabs(["📅 Kalender & Planung", "⚙️ Vorlagen", "📊 Statistik"])
-
-# --- TAB 1: KALENDER (UNVERÄNDERT) ---
 with tab1:
-    cal_options = {
-        "headerToolbar": {"left": "prev,next today", "center": "title", "right": "dayGridMonth,listWeek"},
-        "initialView": "dayGridMonth",
-        "selectable": True,
-        "locale": "de",
-        "firstDay": 1,
-    }
-    state = calendar(events=st.session_state.trainings, options=cal_options, key="dog_calendar")
-    # --- ABSOLUT SICHERE DATUMS-LOGIK ---
-    if state.get("dateClick"):
-        # Wir nehmen den String, trennen ihn am "T" und nehmen nur den ersten Teil (YYYY-MM-DD)
-        raw_date = state["dateClick"]["date"]
-        if "T" in raw_date:
-            st.session_state.selected_date = raw_date.split("T")[0]
-        else:
-            st.session_state.selected_date = raw_date
-            
-    elif state.get("eventClick"):
-        raw_event_date = state["eventClick"]["event"]["start"]
-        if "T" in raw_event_date:
-            st.session_state.selected_date = raw_event_date.split("T")[0]
-        else:
-            st.session_state.selected_date = raw_event_date
+    # Monat umschalten
+    col_nav1, col_nav2, col_nav3 = st.columns([1, 2, 1])
+    with col_nav1:
+        if st.button("⬅️"): st.session_state.view_date -= timedelta(days=30)
+    with col_nav3:
+        if st.button("➡️"): st.session_state.view_date += timedelta(days=30)
+    with col_nav2:
+        curr_month = st.session_state.view_date
+        st.markdown(f"<h3 style='text-align: center;'>{curr_month.strftime('%B %Y')}</h3>", unsafe_allow_html=True)
 
-    # Zur Sicherheit: Falls das Datum dennoch falsch formatiert ankommt, 
-    # erzwingen wir hier nochmal das richtige Format
-    try:
-        temp_date = pd.to_datetime(st.session_state.selected_date).date()
-        st.session_state.selected_date = str(temp_date)
-    except:
-        pass
-        
+    # --- DER EIGENE KALENDER (GRID) ---
+    # Wochentage Header
+    days_header = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+    cols = st.columns(7)
+    for i, day in enumerate(days_header):
+        cols[i].markdown(f"**{day}**")
+
+    # Kalender-Tage berechnen
+    cal = py_cal.Calendar(firstweekday=0)
+    month_days = cal.monthdatescalendar(curr_month.year, curr_month.month)
+
+    for week in month_days:
+        cols = st.columns(7)
+        for i, day in enumerate(week):
+            date_str = str(day)
+            
+            # Farbe bestimmen
+            btn_label = f"{day.day}"
+            btn_type = "secondary"
+            
+            if date_str in st.session_state.trainings:
+                t = st.session_state.trainings[date_str]
+                btn_label = f"{day.day}\n🐶"
+                btn_type = "primary" if t['status'] == "✅" else "secondary" # Blau/Grün-Logic
+            
+            # Der Button für den Tag
+            if cols[i].button(btn_label, key=f"btn_{date_str}", use_container_width=True):
+                st.session_state.selected_date = date_str
 
     st.divider()
+    
+    # --- DETAIL-ANSICHT (UNTER DEM KALENDER) ---
     sel_date = st.session_state.selected_date
-    date_obj = datetime.strptime(sel_date, "%Y-%m-%d")
-    st.markdown(f"### 📍 Fokus: {date_obj.strftime('%A, %d.%m.%Y')}")
+    d_obj = datetime.strptime(sel_date, "%Y-%m-%d")
+    st.subheader(f"📍 Details: {d_obj.strftime('%d.%m.%Y')}")
 
-    training_heute = next((t for t in st.session_state.trainings if t["start"] == sel_date), None)
-
-    if training_heute:
+    if sel_date in st.session_state.trainings:
+        t = st.session_state.trainings[sel_date]
         with st.container(border=True):
-            st.markdown(f"#### 🐶 Übung: {training_heute['title']}")
-            st.write(f"**Dauer:** {training_heute['dauer']} Min | **Material:** {training_heute['material']}")
-            with st.expander("Bewerten & Notizen", expanded=True):
-                u_status = st.checkbox("Training erledigt? ✅", value=(training_heute['status'] == "✅"))
-                u_rating = st.select_slider("Wie war's?", options=["❌", "😐", "🙂", "🤩"], value=training_heute.get('rating', "😐"))
-                u_notes = st.text_area("Notizen", value=training_heute.get('notes', ""))
-                c1, c2 = st.columns(2)
-                if c1.button("Speichern", use_container_width=True, type="primary"):
-                    training_heute.update({"status": "✅" if u_status else "⏳", "rating": u_rating, "notes": u_notes, "color": "#28a745" if u_status else "#ff851b"})
-                    st.rerun()
-                if c2.button("Löschen", use_container_width=True):
-                    st.session_state.trainings = [t for t in st.session_state.trainings if t["start"] != sel_date]
-                    st.rerun()
-    else:
-        st.info("Noch kein Training geplant.")
-        with st.form("planung_form"):
-            auswahl = st.selectbox("Vorlage wählen", [v['name'] for v in st.session_state.vorlagen])
-            if st.form_submit_button("Training eintragen"):
-                v = next(item for item in st.session_state.vorlagen if item['name'] == auswahl)
-                st.session_state.trainings.append({"title": v['name'], "start": sel_date, "dauer": v['dauer'], "material": v['material'], "status": "⏳", "color": "#ff851b", "notes": "", "rating": "😐"})
+            st.markdown(f"#### {t['title']} ({t['dauer']} Min)")
+            st.write(f"**Material:** {t['material']}")
+            
+            u_status = st.checkbox("Erledigt ✅", value=(t['status'] == "✅"), key=f"chk_{sel_date}")
+            u_rating = st.select_slider("Erfolg:", options=["❌", "😐", "🙂", "🤩"], value=t.get('rating', "😐"), key=f"rate_{sel_date}")
+            u_notes = st.text_area("Notizen:", value=t.get('notes', ""), key=f"note_{sel_date}")
+            
+            c1, c2 = st.columns(2)
+            if c1.button("Speichern", type="primary", use_container_width=True):
+                st.session_state.trainings[sel_date].update({
+                    "status": "✅" if u_status else "⏳",
+                    "rating": u_rating, "notes": u_notes
+                })
                 st.rerun()
+            if c2.button("Löschen", use_container_width=True):
+                del st.session_state.trainings[sel_date]
+                st.rerun()
+    else:
+        st.info("Noch nichts geplant.")
+        with st.expander("➕ Neues Training planen"):
+            auswahl = st.selectbox("Vorlage:", [v['name'] for v in st.session_state.vorlagen])
+            if st.button("Eintragen"):
+                v = next(i for i in st.session_state.vorlagen if i['name'] == auswahl)
+                st.session_state.trainings[sel_date] = {
+                    "title": v['name'], "dauer": v['dauer'], "material": v['material'],
+                    "status": "⏳", "notes": "", "rating": "😐"
+                }
+                st.rerun()
+
+# --- TAB 2 & 3 bleiben logisch gleich (Code gekürzt für Übersicht) ---
+# ... (Hier kommen die Vorlagen- und Statistik-Tabs wie zuvor)
+
 
 # --- TAB 2: VORLAGEN (UNVERÄNDERT) ---
 with tab2:
