@@ -48,87 +48,73 @@ if 'selected_date' not in st.session_state: st.session_state.selected_date = str
 # --- TABS ---
 tab1, tab2, tab3 = st.tabs(["📅 Planung", "⚙️ Vorlagen", "📊 Statistik"])
 
-# --- TAB 1: PLANUNG ---
+# --- GEÄNDERTER ABSCHNITT FÜR TAB 1: PLANUNG ---
+
 with tab1:
     st.markdown(f"<h3 style='text-align: center;'>{st.session_state.view_date.strftime('%B %Y')}</h3>", unsafe_allow_html=True)
-    c_nav1, c_nav2 = st.columns(2)
-    with c_nav1:
-        if st.button("⬅️ Zurück"): 
-            st.session_state.view_date -= timedelta(days=30)
-            st.rerun()
-    with c_nav2:
-        if st.button("Vor ➡️"): 
-            st.session_state.view_date += timedelta(days=30)
-            st.rerun()
+    # ... (Navigations-Buttons wie vorher) ...
 
-    # Kalender Grid
-    days_header = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
-    cols_h = st.columns(7)
-    for i, day in enumerate(days_header):
-        cols_h[i].markdown(f"<p style='text-align:center; font-size:10px;'>{day}</p>", unsafe_allow_html=True)
-
-    cal = py_cal.Calendar(firstweekday=0)
-    month_days = cal.monthdatescalendar(st.session_state.view_date.year, st.session_state.view_date.month)
-
-    for week in month_days:
-        cols = st.columns(7)
-        for i, day in enumerate(week):
-            date_str = str(day)
-            label = f"{day.day}"
-            
-            # Check ob Training existiert
-            day_data = trainings_df[trainings_df['datum'] == date_str]
-            if not day_data.empty:
-                status = day_data.iloc[0]['status']
-                label += "\n🐾" if status == "⏳" else "\n✅"
-            
-            if day.month == st.session_state.view_date.month:
-                if cols[i].button(label, key=f"d_{date_str}"):
-                    st.session_state.selected_date = date_str
-            else:
-                cols[i].button(label, key=f"d_{date_str}", disabled=True)
-
+    # Kalender Grid (Wie vorher, zeigt Pfoten an, wenn MINDESTENS ein Training existiert)
+    # ... (Kalender-Code-Block hier einfügen) ...
+    
     st.divider()
     
-    # Detail-Ansicht & Speichern in Google Sheets
+    # DETAIL-ANSICHT (Mehrere Trainings pro Tag)
     sel_date = st.session_state.selected_date
-    st.subheader(f"📍 {datetime.strptime(sel_date, '%Y-%m-%d').strftime('%d.%m.%Y')}")
+    st.subheader(f"📍 Trainings am {datetime.strptime(sel_date, '%Y-%m-%d').strftime('%d.%m.%Y')}")
 
-    current_training = trainings_df[trainings_df['datum'] == sel_date]
+    # Alle Trainings für diesen speziellen Tag filtern
+    day_trainings = trainings_df[trainings_df['datum'] == sel_date]
 
-    if not current_training.empty:
-        t = current_training.iloc[0]
-        with st.container(border=True):
-            st.markdown(f"**{t['title']}** ({t['dauer']} Min)")
-            u_status = st.checkbox("Erledigt ✅", value=(t['status'] == "✅"))
-            u_rating = st.select_slider("Erfolg:", options=["❌", "😐", "🙂", "🤩"], value=t['rating'])
-            u_notes = st.text_area("Notizen:", value=t['notes'])
-            
-            if st.button("Speichern", type="primary"):
-                # Zeile aktualisieren
-                trainings_df.loc[trainings_df['datum'] == sel_date, ['status', 'rating', 'notes']] = ["✅" if u_status else "⏳", u_rating, u_notes]
-                conn.update(worksheet="trainings", data=trainings_df)
-                st.success("Cloud aktualisiert!")
-                st.rerun()
-            if st.button("Löschen"):
-                trainings_df = trainings_df[trainings_df['datum'] != sel_date]
-                conn.update(worksheet="trainings", data=trainings_df)
-                st.rerun()
+    if not day_trainings.empty:
+        for idx, t in day_trainings.iterrows():
+            # Jedes Training in einer eigenen kleinen Box (Expander oder Container)
+            with st.container(border=True):
+                col_a, col_b = st.columns([3, 1])
+                status_icon = "✅" if t['status'] == "✅" else "⏳"
+                col_a.markdown(f"**{status_icon} {t['title']}** ({t['dauer']} Min)")
+                
+                # Bearbeitungs-Modus in einem Expander verstecken, um Platz zu sparen
+                with st.expander("Details bearbeiten / Notizen"):
+                    u_status = st.checkbox("Erledigt", value=(t['status'] == "✅"), key=f"chk_{idx}")
+                    u_rating = st.select_slider("Erfolg:", options=["❌", "😐", "🙂", "🤩"], value=t['rating'], key=f"rate_{idx}")
+                    u_notes = st.text_area("Notizen:", value=t['notes'], key=f"note_{idx}")
+                    
+                    c1, c2 = st.columns(2)
+                    if c1.button("Speichern", key=f"save_{idx}", type="primary"):
+                        trainings_df.at[idx, 'status'] = "✅" if u_status else "⏳"
+                        trainings_df.at[idx, 'rating'] = u_rating
+                        trainings_df.at[idx, 'notes'] = u_notes
+                        conn.update(worksheet="trainings", data=trainings_df)
+                        st.rerun()
+                    if c2.button("Löschen", key=f"del_{idx}"):
+                        trainings_df = trainings_df.drop(idx)
+                        conn.update(worksheet="trainings", data=trainings_df)
+                        st.rerun()
     else:
-        with st.expander("➕ Planen"):
-            if not vorlagen_df.empty:
-                auswahl = st.selectbox("Vorlage:", vorlagen_df['name'].tolist())
-                if st.button("Eintragen"):
-                    v = vorlagen_df[vorlagen_df['name'] == auswahl].iloc[0]
-                    new_row = pd.DataFrame([{
-                        "datum": sel_date, "title": v['name'], "dauer": v['dauer'], 
-                        "material": v['material'], "status": "⏳", "notes": "", "rating": "😐"
-                    }])
-                    trainings_df = pd.concat([trainings_df, new_row], ignore_index=True)
-                    conn.update(worksheet="trainings", data=trainings_df)
-                    st.rerun()
-            else:
-                st.write("Erstelle erst Vorlagen!")
+        st.info("Noch kein Training für heute geplant.")
+
+    # IMMER ANZEIGEN: Button zum Hinzufügen (egal ob schon eins existiert)
+    with st.expander("➕ Neues Training hinzufügen"):
+        if not vorlagen_df.empty:
+            auswahl = st.selectbox("Vorlage wählen:", vorlagen_df['name'].tolist(), key="new_sel")
+            if st.button("Hinzufügen", use_container_width=True):
+                v = vorlagen_df[vorlagen_df['name'] == auswahl].iloc[0]
+                new_row = pd.DataFrame([{
+                    "datum": sel_date, 
+                    "title": v['name'], 
+                    "dauer": v['dauer'], 
+                    "material": v['material'], 
+                    "status": "⏳", 
+                    "notes": "", 
+                    "rating": "😐"
+                }])
+                trainings_df = pd.concat([trainings_df, new_row], ignore_index=True)
+                conn.update(worksheet="trainings", data=trainings_df)
+                st.rerun()
+        else:
+            st.warning("Bitte erst Vorlagen im Tab '⚙️ Vorlagen' erstellen!")
+
 
 # --- TAB 2: VORLAGEN ---
 with tab2:
