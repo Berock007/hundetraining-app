@@ -2,66 +2,90 @@ import streamlit as st
 from streamlit_calendar import calendar
 import datetime
 
-# --- SEITEN-KONFIGURATION ---
-st.set_page_config(page_title="Hunde-Trainer Pro", layout="wide")
-st.title("🐾 Unser Hunde-Trainingsplan")
+# Seiten-Setup
+st.set_page_config(page_title="Hunde-Trainer Pro", layout="wide", page_icon="🐾")
 
-# --- 1. VORLAGEN-VERWALTUNG ---
+# --- STYLE ---
+st.markdown("""
+    <style>
+    .stApp { background-color: #f8f9fa; }
+    .main { border-radius: 15px; }
+    </style>
+    """, unsafe_allow_html=True)
+
+st.title("🐾 Unser Pfoten-Planer")
+
+# --- INITIALISIERUNG (Session State) ---
+if 'trainings' not in st.session_state:
+    # Beispiel-Daten (später kommen diese aus der Cloud)
+    st.session_state.trainings = [
+        {"title": "Leinenführigkeit", "start": "2026-03-27", "status": "✅", "notes": "Super Fokus!"},
+        {"title": "Rückruf", "start": "2026-03-28", "status": "⏳", "notes": "Viel Ablenkung."}
+    ]
+
+# --- SIDEBAR: VORLAGEN ---
 with st.sidebar:
-    st.header("📋 Übungs-Vorlagen")
-    with st.expander("Neue Vorlage erstellen"):
-        v_name = st.text_input("Name der Übung")
-        v_dauer = st.number_input("Dauer (Min)", min_value=5, step=5)
-        v_sachen = st.text_area("Benötigte Sachen")
-        if st.button("Vorlage speichern"):
-            # Hier käme die Logik zum Speichern in die Cloud
-            st.success(f"'{v_name}' wurde als Vorlage gesichert!")
+    st.header("📋 Vorlagen")
+    vorlage_name = st.text_input("Name der Übung")
+    vorlage_dauer = st.number_input("Dauer (Min)", 5, 60, 15)
+    vorlage_sachen = st.text_area("Was wird benötigt?")
+    if st.button("Als Vorlage speichern"):
+        st.success("Vorlage erstellt!")
 
-# --- 2. KALENDER-ANSICHT (Google Style) ---
+# --- HAUPTTEIL: KALENDER ---
 st.subheader("📅 Trainings-Kalender")
-
-# Beispiel-Daten für den Kalender
-calendar_events = [
-    {
-        "title": "Leinenführigkeit (15 min)",
-        "start": "2026-03-27T10:00:00",
-        "end": "2026-03-27T10:15:00",
-        "color": "#3D9970",  # Grün für erledigt
-    },
-    {
-        "title": "Rückruf-Training",
-        "start": "2026-03-28T14:00:00",
-        "end": "2026-03-28T14:20:00",
-        "color": "#FF851B",  # Orange für geplant
-    }
-]
+st.info("Tipp: Klicke auf einen Tag, um Details zu sehen oder zu planen!")
 
 calendar_options = {
-    "editable": "true",
-    "selectable": "true",
     "headerToolbar": {
         "left": "today prev,next",
         "center": "title",
-        "right": "dayGridMonth,timeGridWeek",
+        "right": "dayGridMonth,dayGridWeek",
     },
     "initialView": "dayGridMonth",
+    "selectable": True,
 }
 
-# Das Kalender-Widget anzeigen
-state = calendar(events=calendar_events, options=calendar_options)
+# Kalender anzeigen
+state = calendar(events=st.session_state.trainings, options=calendar_options)
 
-# --- 3. TRAINING LOGGEN & BEWERTEN ---
-st.divider()
-st.subheader("✍️ Training auswerten")
+# --- LOGIK: WAS PASSIERT BEIM KLICK? ---
+if state.get("dateClick"):
+    clicked_date = state["dateClick"]["date"].split("T")[0]
+    
+    st.divider()
+    st.subheader(f"📍 Details für den {clicked_date}")
+    
+    # Suchen, ob an diesem Tag schon ein Training existiert
+    training_heute = next((t for t in st.session_state.trainings if t["start"] == clicked_date), None)
+    
+    if training_heute:
+        st.write(f"**Geplante Übung:** {training_heute['title']}")
+        st.write(f"**Status:** {training_heute['status']}")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            neuer_status = st.checkbox("Als erledigt markieren", value=(training_heute['status'] == "✅"))
+        with col2:
+            bewertung = st.select_slider("Bewertung", options=["❌", "😐", "🙂", "🤩"])
+            
+        neue_notiz = st.text_area("Notizen editieren", value=training_heute.get("notes", ""))
+        
+        if st.button("Änderungen speichern"):
+            training_heute['status'] = "✅" if neuer_status else "⏳"
+            training_heute['notes'] = neue_notiz
+            st.rerun()
+            
+    else:
+        st.write("Noch kein Training geplant.")
+        neue_uebung = st.selectbox("Vorlage wählen", ["Leinenführigkeit", "Rückruf", "Sitz/Platz", "Apportieren"])
+        if st.button(f"Training für {clicked_date} eintragen"):
+            st.session_state.trainings.append({
+                "title": neue_uebung,
+                "start": clicked_date,
+                "status": "⏳",
+                "notes": ""
+            })
+            st.success("Eingetragen!")
+            st.rerun()
 
-col1, col2 = st.columns(2)
-with col1:
-    check_done = st.checkbox("Training erledigt?")
-    bewertung = st.select_slider("Wie lief es?", options=["❌", "🤨", "😐", "🙂", "✅"])
-with col2:
-    notiz = st.text_area("Notizen zum Training", placeholder="Besonderheiten heute...")
-
-if st.button("Cloud-Update senden"):
-    st.balloons()
-    st.info("Daten werden mit deiner Frau synchronisiert...")
-  
