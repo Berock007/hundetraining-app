@@ -6,20 +6,30 @@ import calendar as py_cal
 # --- SETUP ---
 st.set_page_config(page_title="Pfoten-Planer Pro", layout="centered", page_icon="🐾")
 
-# CSS für quadratische Buttons (Handy-Optimierung)
+# EXTREMES HANDY-CSS: Erwirkt, dass 7 Spalten nebeneinander passen
 st.markdown("""
     <style>
-    div[data-testid="stHorizontalBlock"] { gap: 2px !important; }
-    button { 
-        padding: 5px !important; 
-        height: 50px !important; 
-        font-size: 12px !important;
-        border-radius: 5px !important;
+    /* Spaltenabstände minimieren */
+    [data-testid="stHorizontalBlock"] {
+        gap: 2px !important;
+    }
+    /* Buttons schmaler und Text kleiner für Handy */
+    .stButton button {
+        width: 100% !important;
+        padding: 0px !important;
+        height: 45px !important;
+        font-size: 11px !important;
+        line-height: 1.2 !important;
+    }
+    /* Padding der Seite verringern */
+    .block-container {
+        padding-left: 0.5rem !important;
+        padding-right: 0.5rem !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# Initialisierung der Daten
+# Initialisierung
 if 'trainings' not in st.session_state:
     st.session_state.trainings = {} 
 if 'vorlagen' not in st.session_state:
@@ -33,28 +43,24 @@ if 'selected_date' not in st.session_state:
 smiley_map = {"❌": 1, "😐": 2, "🙂": 3, "🤩": 4}
 reverse_smiley_map = {1: "❌", 2: "😐", 3: "🙂", 4: "🤩"}
 
-# --- TABS ---
 tab1, tab2, tab3 = st.tabs(["📅 Planung", "⚙️ Vorlagen", "📊 Statistik"])
 
 # --- TAB 1: PLANUNG ---
 with tab1:
-    st.title("🐾 Pfoten-Planer")
-    
-    # Monat umschalten
     c_nav1, c_nav2, c_nav3 = st.columns([1, 3, 1])
     with c_nav1:
-        if st.button("⬅️", key="prev"): st.session_state.view_date -= timedelta(days=30)
+        if st.button("⬅️"): st.session_state.view_date -= timedelta(days=30)
     with c_nav3:
-        if st.button("➡️", key="next"): st.session_state.view_date += timedelta(days=30)
+        if st.button("➡️"): st.session_state.view_date += timedelta(days=30)
     with c_nav2:
         curr_month = st.session_state.view_date
-        st.markdown(f"<h4 style='text-align: center;'>{curr_month.strftime('%B %Y')}</h4>", unsafe_allow_html=True)
+        st.markdown(f"<p style='text-align: center; font-weight: bold; margin:0;'>{curr_month.strftime('%B %Y')}</p>", unsafe_allow_html=True)
 
-    # Kalender-Grid
+    # Kalender Header
     days_header = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
-    cols = st.columns(7)
+    cols_h = st.columns(7)
     for i, day in enumerate(days_header):
-        cols[i].caption(day)
+        cols_h[i].markdown(f"<p style='text-align:center; font-size:10px; margin:0;'>{day}</p>", unsafe_allow_html=True)
 
     cal = py_cal.Calendar(firstweekday=0)
     month_days = cal.monthdatescalendar(curr_month.year, curr_month.month)
@@ -64,15 +70,18 @@ with tab1:
         for i, day in enumerate(week):
             date_str = str(day)
             
-            # Button Label & Style
-            is_today = (day == datetime.now().date())
+            # Farbe & Label
             label = f"{day.day}"
             if date_str in st.session_state.trainings:
-                label += "\n🐶"
+                t_item = st.session_state.trainings[date_str]
+                label = f"{day.day}\n🐾" if t_item['status'] == "⏳" else f"{day.day}\n✅"
             
-            # Button anzeigen
-            if cols[i].button(label, key=f"d_{date_str}", use_container_width=True):
-                st.session_state.selected_date = date_str
+            # Graue Buttons für Tage außerhalb des Monats
+            if day.month != curr_month.month:
+                cols[i].button(label, key=f"d_{date_str}", disabled=True, use_container_width=True)
+            else:
+                if cols[i].button(label, key=f"d_{date_str}", use_container_width=True):
+                    st.session_state.selected_date = date_str
 
     st.divider()
     
@@ -122,7 +131,7 @@ with tab2:
             if n: st.session_state.vorlagen.append({"name": n, "dauer": d, "material": m})
             st.rerun()
 
-# --- TAB 3: STATISTIK (REPARIERT) ---
+# --- TAB 3: STATISTIK (INKL. ERGEBNIS) ---
 with tab3:
     st.subheader("📊 Statistik")
     if not st.session_state.trainings:
@@ -133,6 +142,7 @@ with tab3:
         for d_str, val in st.session_state.trainings.items():
             row = val.copy()
             row['datum'] = pd.to_datetime(d_str)
+            row['rating_num'] = smiley_map.get(row.get('rating', "😐"), 2)
             data_list.append(row)
         
         df = pd.DataFrame(data_list)
@@ -143,9 +153,25 @@ with tab3:
             df = df[(df['datum'].dt.month == jetzt.month) & (df['datum'].dt.year == jetzt.year)]
 
         if not df.empty:
-            erledigt = len(df[df['status'] == "✅"])
-            st.metric("Abgeschlossene Trainings", erledigt)
+            erledigte_df = df[df['status'] == "✅"]
             
-            stats = df[df['status'] == "✅"].groupby('title').size().reset_index(name='Anzahl')
-            st.table(stats)
+            m1, m2 = st.columns(2)
+            m1.metric("Erledigt", len(erledigte_df))
             
+            if not erledigte_df.empty:
+                avg_rating = round(erledigte_df['rating_num'].mean())
+                m2.metric("Schnitt-Erfolg", reverse_smiley_map.get(avg_rating, "😐"))
+                
+                st.markdown("### Erfolg pro Übung")
+                # Gruppierung mit Anzahl und durchschnittlichem Ergebnis
+                stats = erledigte_df.groupby('title').agg(
+                    Anzahl=('title', 'count'),
+                    Ergebnis_Schnitt=('rating_num', 'mean')
+                ).reset_index()
+                
+                # Zahlen zurück in Smileys wandeln
+                stats['Ergebnis'] = stats['Ergebnis_Schnitt'].apply(lambda x: reverse_smiley_map.get(round(x), "😐"))
+                st.table(stats[['title', 'Anzahl', 'Ergebnis']])
+            else:
+                st.write("Schließe Trainings ab, um Ergebnisse zu sehen.")
+                
