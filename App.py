@@ -5,7 +5,11 @@ import calendar as py_cal
 from streamlit_gsheets import GSheetsConnection
 
 # --- SETUP ---
-st.set_page_config(page_title="Pfoten-Planer Cloud", layout="centered", page_icon="🐾")
+st.set_page_config(
+    page_title="Pfoten-Planer", 
+    page_icon="🐾", 
+    layout="centered"
+)
 
 # --- HANDY-FIX CSS (Wie zuvor) ---
 st.markdown("""
