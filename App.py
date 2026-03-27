@@ -7,7 +7,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- SETUP ---#
 st.set_page_config(
     page_title="Pfoten-Planer",
-    page_icon="https://raw.githubusercontent.com/Berock007/hundetraining-app/refs/heads/main/10361.png", # Hier den Link zwischen die Anführungszeichen
+    page_icon="https://raw.githubusercontent.com/Berock007/hundetraining-app/main/10361.png", # Hier den Link zwischen die Anführungszeichen
     layout="centered"
 )
 
