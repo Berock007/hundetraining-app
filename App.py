@@ -3,15 +3,32 @@ import pandas as pd
 from datetime import datetime, timedelta
 import calendar as py_cal
 from streamlit_gsheets import GSheetsConnection
+import streamlit.components.v1 as components
 
-# --- 1. SETUP (Name & Icon für Chrome) ---
+# --- 1. SETUP (Name & Icon) ---
 st.set_page_config(
     page_title="Pfoten-Planer",
     page_icon="https://raw.githubusercontent.com/Berock007/hundetraining-app/main/10361.png",
     layout="centered"
 )
 
-# --- 2. HANDY-OPTIMIERUNG (CSS) ---
+# --- 2. DER "ERZWINGEN"-TRICK FÜR CHROME & ANDROID ---
+# Dieser Block injiziert JavaScript, um den App-Namen und das Icon im Browser-Header zu fixieren.
+components.html(
+    f"""
+    <script>
+        window.parent.document.title = "Pfoten-Planer";
+        var link = window.parent.document.querySelector("link[rel*='icon']") || window.parent.document.createElement('link');
+        link.type = 'image/png';
+        link.rel = 'shortcut icon';
+        link.href = 'https://raw.githubusercontent.com/Berock007/hundetraining-app/main/10361.png';
+        window.parent.document.getElementsByTagName('head')[0].appendChild(link);
+    </script>
+    """,
+    height=0,
+)
+
+# --- 3. HANDY-OPTIMIERUNG (CSS) ---
 st.markdown("""
     <style>
     [data-testid="stHorizontalBlock"] { display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; gap: 2px !important; }
@@ -22,7 +39,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. CLOUD-VERBINDUNG ---
+# --- 4. CLOUD-VERBINDUNG ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def load_data():
@@ -45,7 +62,7 @@ if 'selected_date' not in st.session_state: st.session_state.selected_date = str
 
 tab1, tab2, tab3 = st.tabs(["📅 Plan", "⚙️ Vorlagen", "📊 Statistik"])
 
-# --- TAB 1: PLANUNG (KALENDER + LISTEN-ANSICHT) ---
+# --- TAB 1: PLANUNG ---
 with tab1:
     st.markdown(f"<h3 style='text-align: center;'>{st.session_state.view_date.strftime('%B %Y')}</h3>", unsafe_allow_html=True)
     c_nav1, c_nav2 = st.columns(2)
@@ -82,7 +99,7 @@ with tab1:
 
     st.divider()
     
-    # Detail-Liste für den gewählten Tag
+    # Detail-Liste
     sel_date = st.session_state.selected_date
     st.subheader(f"📍 {datetime.strptime(sel_date, '%Y-%m-%d').strftime('%d.%m.%Y')}")
 
@@ -157,5 +174,5 @@ with tab3:
             stats['Ergebnis'] = stats['Schnitt'].apply(lambda x: reverse_smiley_map.get(round(x), "😐"))
             st.table(stats[['title', 'Anzahl', 'Ergebnis']])
         else:
-            st.info("Keine erledigten Trainings in diesem Zeitraum.")
+            st.info("Keine erledigten Trainings.")
             
